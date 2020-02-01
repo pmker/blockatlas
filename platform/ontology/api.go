@@ -14,12 +14,6 @@ type Platform struct {
 	client Client
 }
 
-const (
-	GovernanceContract = "AFmseVrdL9f9oyCzZefL9tG6UbviEH9ugK"
-	ONTAssetName       = "ont"
-	ONGAssetName       = "ong"
-)
-
 func (p *Platform) Init() error {
 	p.client = Client{blockatlas.InitClient(viper.GetString("ontology.api"))}
 	return nil
@@ -30,11 +24,11 @@ func (p *Platform) Coin() coin.Coin {
 }
 
 func (p *Platform) GetTxsByAddress(address string) (blockatlas.TxPage, error) {
-	return p.GetTokenTxsByAddress(address, ONTAssetName)
+	return p.GetTokenTxsByAddress(address, string(AssetONT))
 }
 
 func (p *Platform) GetTokenTxsByAddress(address string, token string) (blockatlas.TxPage, error) {
-	txPage, err := p.client.GetTxsOfAddress(address, token)
+	txPage, err := p.client.GetTxsOfAddress(address, AssetType(token))
 	if err != nil {
 		logger.Error(err, "Ontology: Failed to get transactions for address and token",
 			logger.Params{
@@ -45,7 +39,7 @@ func (p *Platform) GetTokenTxsByAddress(address string, token string) (blockatla
 	}
 	var txs []blockatlas.Tx
 	for _, srcTx := range txPage.Result.TxnList {
-		tx, ok := Normalize(&srcTx, token)
+		tx, ok := Normalize(&srcTx, AssetType(token))
 		if !ok {
 			continue
 		}
@@ -101,19 +95,15 @@ func (p *Platform) GetBlockByNumber(num int64) (*blockatlas.Block, error) {
 	return &block, nil
 }
 
-func Normalize(srcTx *Tx, assetName string) (tx blockatlas.Tx, ok bool) {
+func Normalize(srcTx *Tx, assetName AssetType) (tx blockatlas.Tx, ok bool) {
 	if len(srcTx.TransferList) < 1 {
 		return tx, false
 	}
-	transfer := srcTx.TransferList[0]
 	fee := numbers.DecimalExp(srcTx.Fee, 9)
-	var status blockatlas.Status
-	if srcTx.ConfirmFlag == 1 {
-		status = blockatlas.StatusCompleted
-	} else {
+	status := blockatlas.StatusCompleted
+	if srcTx.ConfirmFlag != 1 {
 		status = blockatlas.StatusFailed
 	}
-
 	tx = blockatlas.Tx{
 		ID:     srcTx.TxnHash,
 		Coin:   coin.ONT,
@@ -124,21 +114,21 @@ func Normalize(srcTx *Tx, assetName string) (tx blockatlas.Tx, ok bool) {
 	}
 
 	switch assetName {
-	case ONTAssetName:
-		normalizeONT(&tx, &transfer)
-	case ONGAssetName:
-		normalizeONG(&tx, &transfer)
-	default: // unsupported asset
-		return tx, false
+	case AssetONT:
+		return normalizeONT(tx, srcTx.TransferList)
+	case AssetONG:
+		return normalizeONG(tx, srcTx.TransferList)
 	}
-
-	return tx, true
+	return tx, false
 }
 
-func normalizeONT(tx *blockatlas.Tx, transfer *Transfer) {
+func normalizeONT(tx blockatlas.Tx, transfers Transfers) (blockatlas.Tx, bool) {
+	transfer := transfers.getTransfer()
+	if transfer == nil {
+		return tx, false
+	}
 	i := strings.IndexRune(transfer.Amount, '.')
 	value := transfer.Amount[:i]
-
 	tx.From = transfer.FromAddress
 	tx.To = transfer.ToAddress
 	tx.Type = blockatlas.TxTransfer
@@ -147,14 +137,13 @@ func normalizeONT(tx *blockatlas.Tx, transfer *Transfer) {
 		Symbol:   coin.Coins[coin.ONT].Symbol,
 		Decimals: coin.Coins[coin.ONT].Decimals,
 	}
+	return tx, true
 }
 
-func normalizeONG(tx *blockatlas.Tx, transfer *Transfer) {
-	var value string
-	if transfer.ToAddress == GovernanceContract {
-		value = "0"
-	} else {
-		value = numbers.DecimalExp(transfer.Amount, 9)
+func normalizeONG(tx blockatlas.Tx, transfers Transfers) (blockatlas.Tx, bool) {
+	transfer := transfers.getTransfer()
+	if transfer == nil {
+		return tx, false
 	}
 
 	from := transfer.FromAddress
@@ -162,13 +151,28 @@ func normalizeONG(tx *blockatlas.Tx, transfer *Transfer) {
 	tx.From = from
 	tx.To = to
 	tx.Type = blockatlas.TxNativeTokenTransfer
+	value := numbers.DecimalExp(transfer.Amount, 9)
+	if transfers.isClaimReward() {
+		tx.Meta = blockatlas.AnyAction{
+			Coin:     coin.Ontology().ID,
+			Name:     "Ontology Gas",
+			Symbol:   "ONG",
+			TokenID:  string(AssetONG),
+			Decimals: 9,
+			Value:    blockatlas.Amount(value),
+			Title:    blockatlas.AnyActionClaimRewards,
+			Key:      blockatlas.KeyStakeClaimRewards,
+		}
+		return tx, true
+	}
 	tx.Meta = blockatlas.NativeTokenTransfer{
 		Name:     "Ontology Gas",
 		Symbol:   "ONG",
-		TokenID:  "ong",
+		TokenID:  string(AssetONG),
 		Decimals: 9,
 		Value:    blockatlas.Amount(value),
 		From:     from,
 		To:       to,
 	}
+	return tx, true
 }

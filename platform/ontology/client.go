@@ -15,7 +15,7 @@ const (
 	requestOnlyLatestBlockAmount = 1
 )
 
-func (c *Client) GetTxsOfAddress(address, assetName string) (txPage *TxPage, err error) {
+func (c *Client) GetTxsOfAddress(address string, assetName AssetType) (txPage *TxPage, err error) {
 	url := fmt.Sprintf("address/%s/%s/%d/1", address, assetName, TxPerPage)
 	err = c.Get(&txPage, url, nil)
 	return

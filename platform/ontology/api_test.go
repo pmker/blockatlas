@@ -135,12 +135,12 @@ var dstOngTransfer = blockatlas.Tx{
 func TestNormalize(t *testing.T) {
 	var tests = []struct {
 		Transaction string
-		AssetName   string
+		AssetName   AssetType
 		Expected    blockatlas.Tx
 	}{
-		{srcOntTransfer, ONTAssetName, dstOntTransfer},
-		{srcOngTransfer1, ONGAssetName, dstOngTransfer1},
-		{srcOngTransfer2, ONGAssetName, dstOngTransfer},
+		{srcOntTransfer, AssetONT, dstOntTransfer},
+		{srcOngTransfer1, AssetONG, dstOngTransfer1},
+		{srcOngTransfer2, AssetONG, dstOngTransfer},
 	}
 
 	for _, test := range tests {
