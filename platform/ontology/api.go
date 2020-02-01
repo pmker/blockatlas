@@ -45,7 +45,6 @@ func (p *Platform) GetTokenTxsByAddress(address string, token string) (blockatla
 		}
 		txs = append(txs, tx)
 	}
-
 	return txs, nil
 }
 
@@ -91,7 +90,6 @@ func (p *Platform) GetBlockByNumber(num int64) (*blockatlas.Block, error) {
 		}
 		block.Txs = txs
 	}
-
 	return &block, nil
 }
 

@@ -81,15 +81,15 @@ func (tfs Transfers) getTransfer() *Transfer {
 }
 
 func (tfs Transfers) isClaimReward() bool {
-	// Claim Reward needs to have two transfers
+	// Claim Reward needs to have two transfers.
 	if len(tfs) < 2 {
 		return false
 	}
-	// Both transfer need to be ONG, one for reward and another one as the fee
-	if tfs[0].AssetName != AssetONG && tfs[1].AssetName != AssetONG {
+	// Both transfers need to be ONG, one for reward and another one.
+	if tfs[0].AssetName != AssetONG || tfs[1].AssetName != AssetONG {
 		return false
 	}
-	// Verify if one of the transfers is a fee transfer
+	// Verify if one of the transfers is a fee transfer.
 	if !tfs.hasFeeTransfer() {
 		return false
 	}
